@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Patchbay Trainer</title>
+
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      background: #111;
+      font-family: Arial;
+    }
+
+    #ui {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      color: white;
+      width: 360px;
+      z-index: 9999;
+      background: rgba(0,0,0,0.75);
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    button {
+      margin: 4px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    #container {
+      position: relative;
+      width: 80%;
+      max-width: 1200px;
+    }
+
+    #patchbay {
+      width: 100%;
+      pointer-events: none;
+      display: block;
+    }
+
+    #cables {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    #points {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+    }
+
+    .patch-point {
+      position: absolute;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .patch-point.correct {
+      background: rgba(0,255,120,0.85);
+    }
+
+    .patch-point.wrong {
+      background: rgba(255,60,60,0.85);
+    }
+
+    .patch-point.selected {
+      background: yellow !important;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="ui">
+  <div id="questionText">Loading...</div>
+
+  <button onclick="prevQuestion()">⬅ Prev</button>
+  <button onclick="nextQuestion()">Next ➡</button>
+
+  <br>
+
+  <button onclick="undoLast()">Undo Last Patch</button>
+</div>
+
+<div id="container">
+  <img src="patchbay.png" id="patchbay">
+  <svg id="cables"></svg>
+  <div id="points"></div>
+</div>
+
+<script>
+
+const API_URL =
+"https://script.google.com/macros/s/AKfycbzz0R4vldQ4FtcQGX22DYGBUTK7Wy5B5o6kJJ8Alvyv5dhGo5LMHfWrj2u8ZBHQc2Cj/exec?row=";
+
+const startLeft = 8.3;
+const spacingX = 1.814;
+
+const rowTop = {
+  A: 11.7, B: 15.4, C: 23.2, D: 27,
+  E: 34.85, F: 38.55, G: 46.4, H: 50.1,
+  I: 57.45, J: 61.2, K: 68.32, L: 72.05,
+  M: 79.2, N: 83, O: 90.1, P: 93.9
+};
+
+const rows = "ABCDEFGHIJKLMNOP";
+const cols = 48;
+
+let currentRow = 3;
+let firstPoint = null;
+
+let stateByQuestion = {};
+let correctByQuestion = {};
+let svgGroups = {};
+
+const svg = document.getElementById("cables");
+const container = document.getElementById("container");
+const pointsLayer = document.getElementById("points");
+
+/* ================= GRID ================= */
+for (let r = 0; r < rows.length; r++) {
+  const row = rows[r];
+
+  for (let c = 0; c < cols; c++) {
+
+    const el = document.createElement("div");
+    el.className = "patch-point";
+
+    const id = row + (c + 1);
+    el.dataset.id = id;
+
+    el.style.left = (startLeft + c * spacingX) + "%";
+    el.style.top = rowTop[row] + "%";
+
+    pointsLayer.appendChild(el);
+  }
+}
+
+/* ================= CLICK ================= */
+pointsLayer.addEventListener("click", (e) => {
+
+  const p = e.target.closest(".patch-point");
+  if (!p) return;
+
+  if (!firstPoint) {
+    firstPoint = p;
+    p.classList.add("selected");
+    return;
+  }
+
+  if (firstPoint === p) {
+    firstPoint.classList.remove("selected");
+    firstPoint = null;
+    return;
+  }
+
+  addPatch(firstPoint.dataset.id, p.dataset.id);
+
+  firstPoint.classList.remove("selected");
+  firstPoint = null;
+});
+
+/* ================= ADD PATCH ================= */
+function addPatch(from, to) {
+
+  if (!stateByQuestion[currentRow]) {
+    stateByQuestion[currentRow] = [];
+  }
+
+  const patch = { from, to };
+
+  stateByQuestion[currentRow].push(patch);
+
+  drawPatch(currentRow, patch);
+}
+
+/* ================= DRAW PATCH ================= */
+function drawPatch(row, patch) {
+
+  const g = getGroup(row);
+  const rect = container.getBoundingClientRect();
+
+  const p1 = document.querySelector(`[data-id="${patch.from}"]`);
+  const p2 = document.querySelector(`[data-id="${patch.to}"]`);
+
+  const r1 = p1.getBoundingClientRect();
+  const r2 = p2.getBoundingClientRect();
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+
+  line.setAttribute("x1", r1.left - rect.left + r1.width / 2);
+  line.setAttribute("y1", r1.top - rect.top + r1.height / 2);
+  line.setAttribute("x2", r2.left - rect.left + r2.width / 2);
+  line.setAttribute("y2", r2.top - rect.top + r2.height / 2);
+
+  const correct = (correctByQuestion[row] || []).some(c =>
+    (c.from === patch.from && c.to === patch.to) ||
+    (c.from === patch.to && c.to === patch.from)
+  );
+
+  line.setAttribute("stroke", correct ? "#00ff66" : "#ff4444");
+  line.setAttribute("stroke-width", "3");
+
+  g.appendChild(line);
+
+  patch._line = line;
+
+  markEndpoint(patch.from, correct ? "correct" : "wrong");
+  markEndpoint(patch.to, correct ? "correct" : "wrong");
+}
+
+/* ================= MARK ENDPOINT ================= */
+function markEndpoint(id, type) {
+  const el = document.querySelector(`[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.add(type);
+}
+
+/* ================= GROUP ================= */
+function getGroup(row) {
+  if (!svgGroups[row]) {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    svg.appendChild(g);
+    svgGroups[row] = g;
+  }
+  return svgGroups[row];
+}
+
+/* ================= UNDO LAST PATCH ================= */
+function undoLast() {
+
+  const arr = stateByQuestion[currentRow];
+  if (!arr || arr.length === 0) return;
+
+  const last = arr.pop();
+  last._line?.remove();
+}
+
+/* ================= LOAD QUESTION ================= */
+async function loadQuestion(row) {
+
+  currentRow = row;
+
+  const res = await fetch(API_URL + row);
+  const data = await res.json();
+
+  document.getElementById("questionText").innerText =
+    data.question || "Missing question";
+
+  correctByQuestion[row] = data.patches || [];
+
+  if (!stateByQuestion[row]) {
+    stateByQuestion[row] = [];
+  }
+
+  renderRow(row);
+}
+
+/* ================= RENDER ================= */
+function renderRow(row) {
+
+  if (!svgGroups[row]) {
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    svgGroups[row] = g;
+    svg.appendChild(g);
+  }
+
+  const g = svgGroups[row];
+  g.innerHTML = "";
+
+  (stateByQuestion[row] || []).forEach(p => drawPatch(row, p));
+}
+
+/* ================= NAV ================= */
+function nextQuestion() {
+  loadQuestion(currentRow + 1);
+}
+
+function prevQuestion() {
+  if (currentRow > 2) loadQuestion(currentRow - 1);
+}
+
+/* ================= INIT ================= */
+loadQuestion(3);
+
+</script>
+
+</body>
+</html>
