@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Patchbay Trainer</title>
+  <title>Patchbay Trainer (Completion Tracking)</title>
 
   <style>
     body {
@@ -30,6 +30,11 @@
       cursor: pointer;
     }
 
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
     #container {
       position: relative;
       width: 80%;
@@ -39,26 +44,18 @@
     #patchbay {
       width: 100%;
       pointer-events: none;
-      display: block;
     }
 
-    #cables {
+    #cables, #points {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 2;
     }
 
-    #points {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 3;
-    }
+    #cables { z-index: 2; }
+    #points { z-index: 3; }
 
     .patch-point {
       position: absolute;
@@ -67,21 +64,14 @@
       border-radius: 50%;
       transform: translate(-50%, -50%);
       cursor: pointer;
-      background: transparent;
       border: 1px solid rgba(255,255,255,0.25);
     }
 
-    .patch-point.correct {
-      background: rgba(0,255,120,0.85);
-    }
+    .correct { background: #00ff66; }
+    .wrong { background: #ff4444; }
+    .help { background: #b450ff; }
+    .selected { background: yellow !important; }
 
-    .patch-point.wrong {
-      background: rgba(255,60,60,0.85);
-    }
-
-    .patch-point.selected {
-      background: yellow !important;
-    }
   </style>
 </head>
 
@@ -96,6 +86,9 @@
   <br>
 
   <button onclick="undoLast()">Undo Last Patch</button>
+  <button onclick="helpMe()">Help Me</button>
+
+  <div id="status"></div>
 </div>
 
 <div id="container">
@@ -106,8 +99,7 @@
 
 <script>
 
-const API_URL =
-"https://script.google.com/macros/s/AKfycbzz0R4vldQ4FtcQGX22DYGBUTK7Wy5B5o6kJJ8Alvyv5dhGo5LMHfWrj2u8ZBHQc2Cj/exec?row=";
+const API_URL = "https://script.google.com/macros/s/AKfycbzz0R4vldQ4FtcQGX22DYGBUTK7Wy5B5o6kJJ8Alvyv5dhGo5LMHfWrj2u8ZBHQc2Cj/exec?row=";
 
 const startLeft = 8.3;
 const spacingX = 1.814;
@@ -133,12 +125,11 @@ const svg = document.getElementById("cables");
 const container = document.getElementById("container");
 const pointsLayer = document.getElementById("points");
 
-/* ================= GRID ================= */
+/* GRID */
 for (let r = 0; r < rows.length; r++) {
   const row = rows[r];
 
   for (let c = 0; c < cols; c++) {
-
     const el = document.createElement("div");
     el.className = "patch-point";
 
@@ -152,7 +143,7 @@ for (let r = 0; r < rows.length; r++) {
   }
 }
 
-/* ================= CLICK ================= */
+/* CLICK */
 pointsLayer.addEventListener("click", (e) => {
 
   const p = e.target.closest(".patch-point");
@@ -176,83 +167,133 @@ pointsLayer.addEventListener("click", (e) => {
   firstPoint = null;
 });
 
-/* ================= ADD PATCH ================= */
+/* ADD PATCH */
 function addPatch(from, to) {
 
-  if (!stateByQuestion[currentRow]) {
-    stateByQuestion[currentRow] = [];
+  if (!stateByQuestion[currentRow]) stateByQuestion[currentRow] = [];
+
+  stateByQuestion[currentRow].push({ from, to });
+
+  redrawAll();
+}
+
+/* HELP */
+function helpMe() {
+  const correct = correctByQuestion[currentRow] || [];
+
+  stateByQuestion[currentRow] = correct.map(p => ({
+    from: p.from,
+    to: p.to,
+    help: true
+  }));
+
+  redrawAll();
+}
+
+/* REDRAW */
+function redrawAll() {
+
+  Object.values(svgGroups).forEach(g => g.innerHTML = "");
+
+  document.querySelectorAll(".patch-point")
+    .forEach(p => p.className = "patch-point");
+
+  for (let row in stateByQuestion) {
+
+    (stateByQuestion[row] || []).forEach(patch => {
+
+      const g = getGroup(row);
+      const rect = container.getBoundingClientRect();
+
+      const p1 = document.querySelector(`[data-id="${patch.from}"]`);
+      const p2 = document.querySelector(`[data-id="${patch.to}"]`);
+
+      const r1 = p1.getBoundingClientRect();
+      const r2 = p2.getBoundingClientRect();
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+
+      line.setAttribute("x1", r1.left - rect.left + r1.width/2);
+      line.setAttribute("y1", r1.top - rect.top + r1.height/2);
+      line.setAttribute("x2", r2.left - rect.left + r2.width/2);
+      line.setAttribute("y2", r2.top - rect.top + r2.height/2);
+
+      let color = "#00ffcc";
+
+      if (patch.help) {
+        color = "#b450ff";
+        mark(patch.from,"help");
+        mark(patch.to,"help");
+      } else {
+        const correct = (correctByQuestion[row] || []).some(c =>
+          (c.from === patch.from && c.to === patch.to) ||
+          (c.from === patch.to && c.to === patch.from)
+        );
+
+        color = correct ? "#00ff66" : "#ff4444";
+        mark(patch.from, correct ? "correct" : "wrong");
+        mark(patch.to, correct ? "correct" : "wrong");
+      }
+
+      line.setAttribute("stroke", color);
+      line.setAttribute("stroke-width", "3");
+
+      g.appendChild(line);
+    });
   }
 
-  const patch = { from, to };
-
-  stateByQuestion[currentRow].push(patch);
-
-  drawPatch(currentRow, patch);
+  updateStatus();
 }
 
-/* ================= DRAW PATCH ================= */
-function drawPatch(row, patch) {
+/* STATUS LOGIC */
+function updateStatus() {
 
-  const g = getGroup(row);
-  const rect = container.getBoundingClientRect();
+  const correct = correctByQuestion[currentRow] || [];
+  const user = stateByQuestion[currentRow] || [];
 
-  const p1 = document.querySelector(`[data-id="${patch.from}"]`);
-  const p2 = document.querySelector(`[data-id="${patch.to}"]`);
+  let correctCount = 0;
 
-  const r1 = p1.getBoundingClientRect();
-  const r2 = p2.getBoundingClientRect();
+  user.forEach(u => {
+    const ok = correct.some(c =>
+      (c.from === u.from && c.to === u.to) ||
+      (c.from === u.to && c.to === u.from)
+    );
+    if (ok) correctCount++;
+  });
 
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  let statusText = `${correctCount} / ${correct.length} correct`;
 
-  line.setAttribute("x1", r1.left - rect.left + r1.width / 2);
-  line.setAttribute("y1", r1.top - rect.top + r1.height / 2);
-  line.setAttribute("x2", r2.left - rect.left + r2.width / 2);
-  line.setAttribute("y2", r2.top - rect.top + r2.height / 2);
+  if (correctCount === 0) statusText += " ❌";
+  else if (correctCount < correct.length) statusText += " ⚠️";
+  else statusText += " ✅";
 
-  const correct = (correctByQuestion[row] || []).some(c =>
-    (c.from === patch.from && c.to === patch.to) ||
-    (c.from === patch.to && c.to === patch.from)
-  );
-
-  line.setAttribute("stroke", correct ? "#00ff66" : "#ff4444");
-  line.setAttribute("stroke-width", "3");
-
-  g.appendChild(line);
-
-  patch._line = line;
-
-  markEndpoint(patch.from, correct ? "correct" : "wrong");
-  markEndpoint(patch.to, correct ? "correct" : "wrong");
+  document.getElementById("status").innerText = statusText;
 }
 
-/* ================= MARK ENDPOINT ================= */
-function markEndpoint(id, type) {
+/* HELPERS */
+function mark(id, cls) {
   const el = document.querySelector(`[data-id="${id}"]`);
-  if (!el) return;
-  el.classList.add(type);
+  if (el) el.classList.add(cls);
 }
 
-/* ================= GROUP ================= */
 function getGroup(row) {
   if (!svgGroups[row]) {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
     svg.appendChild(g);
     svgGroups[row] = g;
   }
   return svgGroups[row];
 }
 
-/* ================= UNDO LAST PATCH ================= */
+/* UNDO */
 function undoLast() {
-
   const arr = stateByQuestion[currentRow];
   if (!arr || arr.length === 0) return;
-
-  const last = arr.pop();
-  last._line?.remove();
+  arr.pop();
+  redrawAll();
 }
 
-/* ================= LOAD QUESTION ================= */
+/* LOAD */
 async function loadQuestion(row) {
 
   currentRow = row;
@@ -260,43 +301,20 @@ async function loadQuestion(row) {
   const res = await fetch(API_URL + row);
   const data = await res.json();
 
-  document.getElementById("questionText").innerText =
-    data.question || "Missing question";
+  document.getElementById("questionText").innerText = data.question;
 
   correctByQuestion[row] = data.patches || [];
 
-  if (!stateByQuestion[row]) {
-    stateByQuestion[row] = [];
-  }
+  if (!stateByQuestion[row]) stateByQuestion[row] = [];
 
-  renderRow(row);
+  redrawAll();
 }
 
-/* ================= RENDER ================= */
-function renderRow(row) {
+/* NAV */
+function nextQuestion() { loadQuestion(currentRow + 1); }
+function prevQuestion() { if (currentRow > 2) loadQuestion(currentRow - 1); }
 
-  if (!svgGroups[row]) {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    svgGroups[row] = g;
-    svg.appendChild(g);
-  }
-
-  const g = svgGroups[row];
-  g.innerHTML = "";
-
-  (stateByQuestion[row] || []).forEach(p => drawPatch(row, p));
-}
-
-/* ================= NAV ================= */
-function nextQuestion() {
-  loadQuestion(currentRow + 1);
-}
-
-function prevQuestion() {
-  if (currentRow > 2) loadQuestion(currentRow - 1);
-}
-
-/* ================= INIT ================= */
+/* INIT */
 loadQuestion(3);
 
 </script>
