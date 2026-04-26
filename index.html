@@ -157,6 +157,12 @@
 let gameStarted = false;
 let userName = "";
 
+/* ===== MOODLE ID (ADDED) ===== */
+const params = new URLSearchParams(window.location.search);
+const moodleID = params.get("moodleid") || "";
+
+console.log("MOODLE ID:", moodleID);
+
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
 let QUESTION_SET = [];
@@ -388,7 +394,7 @@ function commitPatches(){
   loadQuestion();
 }
 
-/* ================= SUBMIT (UPDATED PERCENT DISPLAY) ================= */
+/* ================= SUBMIT ================= */
 function submitGrade(){
 
   const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
@@ -400,6 +406,7 @@ function submitGrade(){
 
   const payload={
     user:userName,
+    moodleID,
     score,
     total,
     percent,
