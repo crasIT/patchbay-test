@@ -388,7 +388,7 @@ function commitPatches(){
   loadQuestion();
 }
 
-/* ================= SUBMIT (UPDATED PERCENT) ================= */
+/* ================= SUBMIT (UPDATED PERCENT DISPLAY) ================= */
 function submitGrade(){
 
   const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
