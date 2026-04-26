@@ -1,49 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Patchbay Trainer (Completion Tracking)</title>
+  <title>Patchbay Trainer</title>
 
   <style>
     body {
       margin: 0;
-      display: flex;
-      justify-content: center;
       background: #111;
       font-family: Arial;
+      color: white;
     }
 
-    #ui {
+    #introScreen {
       position: fixed;
-      top: 10px;
-      right: 10px;
-      color: white;
-      width: 360px;
-      z-index: 9999;
-      background: rgba(0,0,0,0.75);
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 5000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #introBox {
+      width: 480px;
+      background: #1a1a1a;
+      padding: 25px;
+      border-radius: 10px;
+      border: 1px solid #333;
+    }
+
+    #introBox input {
+      width: 100%;
       padding: 10px;
-      border-radius: 6px;
+      margin-top: 10px;
+      margin-bottom: 10px;
     }
 
     button {
-      margin: 4px;
-      padding: 6px 10px;
+      padding: 8px 12px;
       cursor: pointer;
     }
 
-    #status {
-      margin-top: 10px;
-      font-size: 14px;
+    #header {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      background: rgba(0,0,0,0.95);
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 2px solid #333;
+    }
+
+    #questionText {
+      max-width: 70%;
+      font-size: 18px;
+    }
+
+    #progressText {
+      font-size: 13px;
+      opacity: 0.7;
+    }
+
+    #controls {
+      display: flex;
+      gap: 10px;
     }
 
     #container {
       position: relative;
-      width: 80%;
-      max-width: 1200px;
+      width: 100%;
+      max-width: 1600px;
+      margin: auto;
     }
 
     #patchbay {
       width: 100%;
-      pointer-events: none;
+      display: block;
     }
 
     #cables, #points {
@@ -67,28 +100,49 @@
       border: 1px solid rgba(255,255,255,0.25);
     }
 
+    .pending { background: orange; }
     .correct { background: #00ff66; }
-    .wrong { background: #ff4444; }
-    .help { background: #b450ff; }
+    .incorrect { background: #ff4444; }
     .selected { background: yellow !important; }
-
   </style>
 </head>
 
 <body>
 
-<div id="ui">
-  <div id="questionText">Loading...</div>
+<div id="introScreen">
+  <div id="introBox">
+    <h1>Patchbay Homework Assignment</h1>
 
-  <button onclick="prevQuestion()">⬅ Prev</button>
-  <button onclick="nextQuestion()">Next ➡</button>
+    <p>
+      Each question represents a routing task.<br><br>
 
-  <br>
+      Click on the patch points to make the connected patch which you will see in orange.<br><br>
 
-  <button onclick="undoLast()">Undo Last Patch</button>
-  <button onclick="helpMe()">Help Me</button>
+      If you make an incorrect patch or click on the wrong point, you can click "Undo" to remove that patch and start over.<br><br>
 
-  <div id="status"></div>
+      Once you are satisfied you have made the correct patch, click "Commit" to lock your answer and move forward.<br><br>
+
+      If you got the patch correct it will turn <span style="color:#00ff66;font-weight:bold;">green</span>.<br>
+      If you got the patch incorrect it will turn <span style="color:#ff4444;font-weight:bold;">red</span>.<br><br>
+
+      Your score is tracked automatically and you will be shown your score at the end of the exercise.
+    </p>
+
+    <input id="nameInput" placeholder="Enter your name">
+    <button onclick="startGame()">Start</button>
+  </div>
+</div>
+
+<div id="header">
+  <div>
+    <div id="questionText">Loading...</div>
+    <div id="progressText"></div>
+  </div>
+
+  <div id="controls">
+    <button onclick="undoLast()">Undo</button>
+    <button onclick="commitPatches()">Commit</button>
+  </div>
 </div>
 
 <div id="container">
@@ -99,225 +153,270 @@
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbzz0R4vldQ4FtcQGX22DYGBUTK7Wy5B5o6kJJ8Alvyv5dhGo5LMHfWrj2u8ZBHQc2Cj/exec?row=";
+/* ================= STATE ================= */
+let gameStarted = false;
+let userName = "";
 
-const startLeft = 8.3;
-const spacingX = 1.814;
+const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
-const rowTop = {
-  A: 11.7, B: 15.4, C: 23.2, D: 27,
-  E: 34.85, F: 38.55, G: 46.4, H: 50.1,
-  I: 57.45, J: 61.2, K: 68.32, L: 72.05,
-  M: 79.2, N: 83, O: 90.1, P: 93.9
-};
-
-const rows = "ABCDEFGHIJKLMNOP";
-const cols = 48;
-
-let currentRow = 3;
+let QUESTION_SET = [];
+let DATA_BY_ROW = {};
+let currentIndex = 0;
 let firstPoint = null;
 
 let stateByQuestion = {};
 let correctByQuestion = {};
-let svgGroups = {};
 
-const svg = document.getElementById("cables");
-const container = document.getElementById("container");
-const pointsLayer = document.getElementById("points");
+let globalPatches = [];
 
-/* GRID */
-for (let r = 0; r < rows.length; r++) {
-  const row = rows[r];
-
-  for (let c = 0; c < cols; c++) {
-    const el = document.createElement("div");
-    el.className = "patch-point";
-
-    const id = row + (c + 1);
-    el.dataset.id = id;
-
-    el.style.left = (startLeft + c * spacingX) + "%";
-    el.style.top = rowTop[row] + "%";
-
-    pointsLayer.appendChild(el);
-  }
+/* ================= START ================= */
+function startGame() {
+  userName = document.getElementById("nameInput").value || "Anonymous";
+  document.getElementById("introScreen").style.display = "none";
+  gameStarted = true;
 }
 
-/* CLICK */
-pointsLayer.addEventListener("click", (e) => {
-
-  const p = e.target.closest(".patch-point");
-  if (!p) return;
-
-  if (!firstPoint) {
-    firstPoint = p;
-    p.classList.add("selected");
-    return;
-  }
-
-  if (firstPoint === p) {
-    firstPoint.classList.remove("selected");
-    firstPoint = null;
-    return;
-  }
-
-  addPatch(firstPoint.dataset.id, p.dataset.id);
-
-  firstPoint.classList.remove("selected");
-  firstPoint = null;
-});
-
-/* ADD PATCH */
-function addPatch(from, to) {
-
-  if (!stateByQuestion[currentRow]) stateByQuestion[currentRow] = [];
-
-  stateByQuestion[currentRow].push({ from, to });
-
-  redrawAll();
-}
-
-/* HELP */
-function helpMe() {
-  const correct = correctByQuestion[currentRow] || [];
-
-  stateByQuestion[currentRow] = correct.map(p => ({
-    from: p.from,
-    to: p.to,
-    help: true
-  }));
-
-  redrawAll();
-}
-
-/* REDRAW */
-function redrawAll() {
-
-  Object.values(svgGroups).forEach(g => g.innerHTML = "");
-
-  document.querySelectorAll(".patch-point")
-    .forEach(p => p.className = "patch-point");
-
-  for (let row in stateByQuestion) {
-
-    (stateByQuestion[row] || []).forEach(patch => {
-
-      const g = getGroup(row);
-      const rect = container.getBoundingClientRect();
-
-      const p1 = document.querySelector(`[data-id="${patch.from}"]`);
-      const p2 = document.querySelector(`[data-id="${patch.to}"]`);
-
-      const r1 = p1.getBoundingClientRect();
-      const r2 = p2.getBoundingClientRect();
-
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-
-      line.setAttribute("x1", r1.left - rect.left + r1.width/2);
-      line.setAttribute("y1", r1.top - rect.top + r1.height/2);
-      line.setAttribute("x2", r2.left - rect.left + r2.width/2);
-      line.setAttribute("y2", r2.top - rect.top + r2.height/2);
-
-      let color = "#00ffcc";
-
-      if (patch.help) {
-        color = "#b450ff";
-        mark(patch.from,"help");
-        mark(patch.to,"help");
-      } else {
-        const correct = (correctByQuestion[row] || []).some(c =>
-          (c.from === patch.from && c.to === patch.to) ||
-          (c.from === patch.to && c.to === patch.from)
-        );
-
-        color = correct ? "#00ff66" : "#ff4444";
-        mark(patch.from, correct ? "correct" : "wrong");
-        mark(patch.to, correct ? "correct" : "wrong");
-      }
-
-      line.setAttribute("stroke", color);
-      line.setAttribute("stroke-width", "3");
-
-      g.appendChild(line);
-    });
-  }
-
-  updateStatus();
-}
-
-/* STATUS LOGIC */
-function updateStatus() {
-
-  const correct = correctByQuestion[currentRow] || [];
-  const user = stateByQuestion[currentRow] || [];
-
-  let correctCount = 0;
-
-  user.forEach(u => {
-    const ok = correct.some(c =>
-      (c.from === u.from && c.to === u.to) ||
-      (c.from === u.to && c.to === u.from)
-    );
-    if (ok) correctCount++;
-  });
-
-  let statusText = `${correctCount} / ${correct.length} correct`;
-
-  if (correctCount === 0) statusText += " ❌";
-  else if (correctCount < correct.length) statusText += " ⚠️";
-  else statusText += " ✅";
-
-  document.getElementById("status").innerText = statusText;
-}
-
-/* HELPERS */
-function mark(id, cls) {
-  const el = document.querySelector(`[data-id="${id}"]`);
-  if (el) el.classList.add(cls);
-}
-
-function getGroup(row) {
-  if (!svgGroups[row]) {
-    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
-    svg.appendChild(g);
-    svgGroups[row] = g;
-  }
-  return svgGroups[row];
-}
-
-/* UNDO */
-function undoLast() {
-  const arr = stateByQuestion[currentRow];
-  if (!arr || arr.length === 0) return;
-  arr.pop();
-  redrawAll();
-}
-
-/* LOAD */
-async function loadQuestion(row) {
-
-  currentRow = row;
-
-  const res = await fetch(API_URL + row);
+/* ================= INIT ================= */
+async function init() {
+  const res = await fetch(API_URL);
   const data = await res.json();
 
-  document.getElementById("questionText").innerText = data.question;
+  data.forEach(d => DATA_BY_ROW[d.row] = d);
 
-  correctByQuestion[row] = data.patches || [];
+  QUESTION_SET = buildQuestionSet(data);
 
-  if (!stateByQuestion[row]) stateByQuestion[row] = [];
-
-  redrawAll();
+  buildGrid();
+  loadQuestion();
 }
 
-/* NAV */
-function nextQuestion() { loadQuestion(currentRow + 1); }
-function prevQuestion() { if (currentRow > 2) loadQuestion(currentRow - 1); }
+/* ================= RANDOMIZATION ================= */
+function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
 
-/* INIT */
-loadQuestion(3);
+function buildQuestionSet(data){
+  const TARGET = 10;
+
+  const groups = {};
+  const singles = [];
+
+  data.forEach(q=>{
+    if(q.group){
+      if(!groups[q.group]) groups[q.group]=[];
+      groups[q.group].push(q);
+    } else singles.push(q);
+  });
+
+  let groupBlocks = Object.values(groups);
+  shuffle(groupBlocks);
+  shuffle(singles);
+
+  let selected = [];
+
+  if(groupBlocks.length) selected.push(...groupBlocks[0]);
+
+  let g=1,s=0;
+
+  while(selected.length<TARGET){
+    if(g<groupBlocks.length) selected.push(...groupBlocks[g++]);
+    else if(s<singles.length) selected.push(singles[s++]);
+    else break;
+  }
+
+  const blocks=[];
+  const used=new Set();
+
+  selected.forEach(q=>{
+    if(q.group){
+      if(!used.has(q.group)){
+        blocks.push(groups[q.group]);
+        used.add(q.group);
+      }
+    } else blocks.push([q]);
+  });
+
+  shuffle(blocks);
+  return blocks.flat().map(q=>q.row);
+}
+
+/* ================= GRID ================= */
+function buildGrid(){
+  const rows="ABCDEFGHIJKLMNOP";
+  const cols=48;
+
+  const startLeft=8.3;
+  const spacingX=1.814;
+
+  const rowTop={
+    A:11.7,B:15.4,C:23.2,D:27,E:34.85,F:38.55,G:46.4,H:50.1,
+    I:57.45,J:61.2,K:68.32,L:72.05,M:79.2,N:83,O:90.1,P:93.9
+  };
+
+  const points=document.getElementById("points");
+
+  for(let r=0;r<rows.length;r++){
+    for(let c=0;c<cols;c++){
+      const el=document.createElement("div");
+      el.className="patch-point";
+
+      const id=rows[r]+(c+1);
+      el.dataset.id=id;
+
+      el.style.left=(startLeft+c*spacingX)+"%";
+      el.style.top=rowTop[rows[r]]+"%";
+
+      points.appendChild(el);
+    }
+  }
+
+  points.addEventListener("click",(e)=>{
+    const p=e.target.closest(".patch-point");
+    if(!p||!gameStarted) return;
+
+    if(!firstPoint){
+      firstPoint=p;
+      p.classList.add("selected");
+      return;
+    }
+
+    if(firstPoint===p){
+      firstPoint.classList.remove("selected");
+      firstPoint=null;
+      return;
+    }
+
+    addPatch(firstPoint.dataset.id,p.dataset.id);
+    firstPoint.classList.remove("selected");
+    firstPoint=null;
+  });
+}
+
+/* ================= PATCH ================= */
+function addPatch(from,to){
+  const row=QUESTION_SET[currentIndex];
+  if(!stateByQuestion[row]) stateByQuestion[row]=[];
+
+  stateByQuestion[row].push({from,to,status:"pending"});
+  redraw();
+}
+
+/* ================= LOAD ================= */
+function loadQuestion(){
+  const row=QUESTION_SET[currentIndex];
+  const data=DATA_BY_ROW[row];
+
+  document.getElementById("questionText").innerText=data.question;
+  document.getElementById("progressText").innerText=
+    `${currentIndex+1} / ${QUESTION_SET.length}`;
+
+  correctByQuestion[row]=data.patches||[];
+  if(!stateByQuestion[row]) stateByQuestion[row]=[];
+
+  redraw();
+}
+
+/* ================= DRAW ================= */
+function redraw(){
+  const svg=document.getElementById("cables");
+  svg.innerHTML="";
+
+  const rect=document.getElementById("container").getBoundingClientRect();
+
+  QUESTION_SET.forEach(row=>{
+    const patches=stateByQuestion[row]||[];
+
+    patches.forEach(p=>{
+      const a=document.querySelector(`[data-id="${p.from}"]`);
+      const b=document.querySelector(`[data-id="${p.to}"]`);
+      if(!a||!b)return;
+
+      const r1=a.getBoundingClientRect();
+      const r2=b.getBoundingClientRect();
+
+      const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+
+      line.setAttribute("x1",r1.left-rect.left+r1.width/2);
+      line.setAttribute("y1",r1.top-rect.top+r1.height/2);
+      line.setAttribute("x2",r2.left-rect.left+r2.width/2);
+      line.setAttribute("y2",r2.top-rect.top+r2.height/2);
+
+      let color="orange";
+      if(p.status==="correct") color="#00ff66";
+      if(p.status==="incorrect") color="#ff4444";
+
+      line.setAttribute("stroke",color);
+      line.setAttribute("stroke-width","3");
+
+      svg.appendChild(line);
+
+      a.classList.add(p.status);
+      b.classList.add(p.status);
+    });
+  });
+}
+
+/* ================= UNDO ================= */
+function undoLast(){
+  const row=QUESTION_SET[currentIndex];
+  stateByQuestion[row].pop();
+  redraw();
+}
+
+/* ================= COMMIT ================= */
+function commitPatches(){
+
+  const row=QUESTION_SET[currentIndex];
+  const user=stateByQuestion[row];
+  const correct=correctByQuestion[row];
+
+  user.forEach(p=>{
+    const ok=correct.some(c=>
+      (c.from===p.from&&c.to===p.to)||
+      (c.from===p.to&&c.to===p.from)
+    );
+    p.status=ok?"correct":"incorrect";
+
+    globalPatches.push({...p});
+  });
+
+  currentIndex++;
+
+  if(currentIndex>=QUESTION_SET.length){
+    redraw();
+    submitGrade();
+    return;
+  }
+
+  loadQuestion();
+}
+
+/* ================= SUBMIT (UPDATED PERCENT) ================= */
+function submitGrade(){
+
+  const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
+  const total = globalPatches.length;
+
+  const percent = total === 0 ? 0 : Math.round((score / total) * 100);
+
+  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
+
+  const payload={
+    user:userName,
+    score,
+    total,
+    percent,
+    details:globalPatches
+  };
+
+  fetch(API_URL,{
+    method:"POST",
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.text())
+  .then(text => console.log("SERVER RESPONSE:", text))
+  .catch(err => console.error("SUBMISSION FAILED:", err));
+}
+
+init();
 
 </script>
-
 </body>
 </html>
