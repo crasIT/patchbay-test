@@ -129,6 +129,7 @@
     </p>
 
     <input id="nameInput" placeholder="Enter your name">
+    <input id="spinInput" placeholder="Enter your SPIN">
     <button onclick="startGame()">Start</button>
   </div>
 </div>
@@ -156,6 +157,7 @@
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
+ let userSpin = ""; 
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
@@ -171,6 +173,7 @@ let globalPatches = [];
 /* ================= START ================= */
 function startGame() {
   userName = document.getElementById("nameInput").value || "Anonymous";
+   userSpin = document.getElementById("spinInput").value || "";
   document.getElementById("introScreen").style.display = "none";
   gameStarted = true;
 }
@@ -396,6 +399,7 @@ function submitGrade(){
     method:"POST",
     body: JSON.stringify({
       user:userName,
+      spin:userSpin,
       score,
       total,
       percent,
