@@ -115,16 +115,11 @@
 
     <p>
       Each question represents a routing task.<br><br>
-
       Click on the patch points to make the connected patch which you will see in orange.<br><br>
-
       If you make an incorrect patch or click on the wrong point, you can click "Undo" to remove that patch and start over.<br><br>
-
       Once you are satisfied you have made the correct patch, click "Commit" to lock your answer and move forward.<br><br>
-
       If you got the patch correct it will turn <span style="color:#00ff66;font-weight:bold;">green</span>.<br>
       If you got the patch incorrect it will turn <span style="color:#ff4444;font-weight:bold;">red</span>.<br><br>
-
       Your score is tracked automatically and you will be shown your score at the end of the exercise.
     </p>
 
@@ -152,25 +147,19 @@
 </div>
 
 <script>
-/* ===== DEBUG: MOODLE ID TEST ===== */
+
+/* ===== MOODLE ID + DEBUG (CLEANED) ===== */
 console.log("STEP 1 - SCRIPT LOADED");
 
-const params = new URLSearchParams(window.location.search);
+const urlParams = new URLSearchParams(window.location.search);
 console.log("STEP 2 - RAW QUERY:", window.location.search);
 
-const moodleID = params.get("moodleid") || "";
+const moodleID = urlParams.get("moodleid") || "";
 console.log("STEP 3 - MOODLE ID =", moodleID);
 
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
-
-
-/* ===== MOODLE ID (ADDED) ===== */
-const params = new URLSearchParams(window.location.search);
-const moodleID = params.get("moodleid") || "";
-
-console.log("MOODLE ID:", moodleID);
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
@@ -408,7 +397,6 @@ function submitGrade(){
 
   const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
   const total = globalPatches.length;
-
   const percent = total === 0 ? 0 : Math.round((score / total) * 100);
 
   alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
