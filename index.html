@@ -152,10 +152,19 @@
 </div>
 
 <script>
+/* ===== DEBUG: MOODLE ID TEST ===== */
+console.log("STEP 1 - SCRIPT LOADED");
+
+const params = new URLSearchParams(window.location.search);
+console.log("STEP 2 - RAW QUERY:", window.location.search);
+
+const moodleID = params.get("moodleid") || "";
+console.log("STEP 3 - MOODLE ID =", moodleID);
 
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
+
 
 /* ===== MOODLE ID (ADDED) ===== */
 const params = new URLSearchParams(window.location.search);
