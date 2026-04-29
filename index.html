@@ -143,6 +143,10 @@
   <div id="controls">
     <button onclick="undoLast()">Undo</button>
     <button onclick="commitPatches()">Commit</button>
+  <button id="pdfBtn" onclick="savePDF()" style="display:none;">
+    Save your homework (PDF)
+  </button>
+    
   </div>
 </div>
 
@@ -395,6 +399,10 @@ function submitGrade(){
 
   alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
 
+document.getElementById("pdfBtn").style.display = "inline-block";
+document.getElementById("questionText").innerText =
+  "Submission Complete — Score: " + percent + "%";
+  
   fetch(API_URL,{
     method:"POST",
     body: JSON.stringify({
@@ -410,6 +418,10 @@ function submitGrade(){
 }
 
 init();
+
+  function savePDF() {
+  window.print();
+}
 
 </script>
 </body>
