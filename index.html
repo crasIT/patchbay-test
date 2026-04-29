@@ -104,35 +104,35 @@
     .correct { background: #00ff66; }
     .incorrect { background: #ff4444; }
     .selected { background: yellow !important; }
-
-    #downloadBtn {
-      display: none;
-      padding: 12px 18px;
-      font-size: 16px;
-      margin-top: 20px;
-    }
   </style>
 </head>
 
 <body>
 
-<!-- INTRO -->
 <div id="introScreen">
   <div id="introBox">
     <h1>Patchbay Homework Assignment</h1>
 
     <p>
-      Enter your details to begin.
+      Each question represents a routing task.<br><br>
+
+      Click on the patch points to make the connected patch.<br><br>
+
+      Use Undo to remove mistakes.<br><br>
+
+      Commit locks your answer and moves forward.<br><br>
+
+      Correct = green<br>
+      Incorrect = red<br><br>
+
+      Score is tracked automatically.
     </p>
 
     <input id="nameInput" placeholder="Enter your name">
-    <input id="spinInput" placeholder="Enter your SPIN">
-
     <button onclick="startGame()">Start</button>
   </div>
 </div>
 
-<!-- HEADER -->
 <div id="header">
   <div>
     <div id="questionText">Loading...</div>
@@ -145,18 +145,10 @@
   </div>
 </div>
 
-<!-- QUIZ -->
 <div id="container">
   <img src="patchbay.png" id="patchbay">
   <svg id="cables"></svg>
   <div id="points"></div>
-</div>
-
-<!-- FINAL DOWNLOAD -->
-<div style="text-align:center;">
-  <button id="downloadBtn" onclick="downloadPDF()">
-    Download PDF
-  </button>
 </div>
 
 <script>
@@ -164,7 +156,6 @@
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
-let spin = "";
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
@@ -180,12 +171,8 @@ let globalPatches = [];
 /* ================= START ================= */
 function startGame() {
   userName = document.getElementById("nameInput").value || "Anonymous";
-  spin = document.getElementById("spinInput").value || "UNKNOWN";
-
   document.getElementById("introScreen").style.display = "none";
   gameStarted = true;
-
-  init();
 }
 
 /* ================= INIT ================= */
@@ -199,6 +186,53 @@ async function init() {
 
   buildGrid();
   loadQuestion();
+}
+
+/* ================= RANDOMIZATION ================= */
+function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
+
+function buildQuestionSet(data){
+  const TARGET = 10;
+
+  const groups = {};
+  const singles = [];
+
+  data.forEach(q=>{
+    if(q.group){
+      if(!groups[q.group]) groups[q.group]=[];
+      groups[q.group].push(q);
+    } else singles.push(q);
+  });
+
+  let groupBlocks = Object.values(groups);
+  shuffle(groupBlocks);
+  shuffle(singles);
+
+  let selected = [];
+
+  if(groupBlocks.length) selected.push(...groupBlocks[0]);
+
+  let g=1,s=0;
+  while(selected.length<TARGET){
+    if(g<groupBlocks.length) selected.push(...groupBlocks[g++]);
+    else if(s<singles.length) selected.push(singles[s++]);
+    else break;
+  }
+
+  const blocks=[];
+  const used=new Set();
+
+  selected.forEach(q=>{
+    if(q.group){
+      if(!used.has(q.group)){
+        blocks.push(groups[q.group]);
+        used.add(q.group);
+      }
+    } else blocks.push([q]);
+  });
+
+  shuffle(blocks);
+  return blocks.flat().map(q=>q.row);
 }
 
 /* ================= GRID ================= */
@@ -253,14 +287,16 @@ function buildGrid(){
   });
 }
 
-/* ================= GAME ================= */
+/* ================= PATCH ================= */
 function addPatch(from,to){
   const row=QUESTION_SET[currentIndex];
   if(!stateByQuestion[row]) stateByQuestion[row]=[];
+
   stateByQuestion[row].push({from,to,status:"pending"});
   redraw();
 }
 
+/* ================= LOAD ================= */
 function loadQuestion(){
   const row=QUESTION_SET[currentIndex];
   const data=DATA_BY_ROW[row];
@@ -275,6 +311,7 @@ function loadQuestion(){
   redraw();
 }
 
+/* ================= DRAW ================= */
 function redraw(){
   const svg=document.getElementById("cables");
   svg.innerHTML="";
@@ -313,13 +350,14 @@ function redraw(){
   });
 }
 
-/* ================= CONTROLS ================= */
+/* ================= UNDO ================= */
 function undoLast(){
   const row=QUESTION_SET[currentIndex];
   stateByQuestion[row].pop();
   redraw();
 }
 
+/* ================= COMMIT ================= */
 function commitPatches(){
   const row=QUESTION_SET[currentIndex];
   const user=stateByQuestion[row];
@@ -337,53 +375,34 @@ function commitPatches(){
   currentIndex++;
 
   if(currentIndex>=QUESTION_SET.length){
-    finishQuiz();
+    redraw();
+    submitGrade();
     return;
   }
 
   loadQuestion();
 }
 
-/* ================= FINISH ================= */
-function finishQuiz(){
-  const score = globalPatches.filter(p=>p.status==="correct").length;
-  const total = globalPatches.length;
-  const percent = total ? Math.round((score/total)*100) : 0;
-
-  document.getElementById("questionText").innerText =
-    `FINAL SCORE: ${percent}%`;
-
-  document.getElementById("progressText").innerText =
-    `Name: ${userName} | SPIN: ${spin}`;
-
-  document.getElementById("controls").innerHTML = "";
-
-  document.getElementById("downloadBtn").style.display = "block";
-
-  submitGrade(percent, score, total);
-}
-
-/* ================= PDF ================= */
-function downloadPDF(){
-  window.print();
-}
-
 /* ================= SUBMIT ================= */
-function submitGrade(percent, score, total){
+function submitGrade(){
 
-  const payload={
-    user:userName,
-    spin:spin,
-    score,
-    total,
-    percent,
-    details:globalPatches
-  };
+  const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
+  const total = globalPatches.length;
+  const percent = total === 0 ? 0 : Math.round((score / total) * 100);
+
+  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
 
   fetch(API_URL,{
     method:"POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      user:userName,
+      score,
+      total,
+      percent,
+      details:globalPatches
+    })
   });
+
 }
 
 init();
