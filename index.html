@@ -104,30 +104,42 @@
     .correct { background: #00ff66; }
     .incorrect { background: #ff4444; }
     .selected { background: yellow !important; }
+
+    /* END SCREEN */
+    #endScreen {
+      display: none;
+      padding: 40px;
+      text-align: center;
+    }
+
+    #saveBtn {
+      margin-top: 20px;
+      padding: 12px 18px;
+      font-size: 16px;
+    }
   </style>
 </head>
 
 <body>
 
+<!-- INTRO -->
 <div id="introScreen">
   <div id="introBox">
     <h1>Patchbay Homework Assignment</h1>
 
     <p>
       Each question represents a routing task.<br><br>
-      Click on the patch points to make the connected patch which you will see in orange.<br><br>
-      If you make an incorrect patch or click on the wrong point, you can click "Undo" to remove that patch and start over.<br><br>
-      Once you are satisfied you have made the correct patch, click "Commit" to lock your answer and move forward.<br><br>
-      If you got the patch correct it will turn <span style="color:#00ff66;font-weight:bold;">green</span>.<br>
-      If you got the patch incorrect it will turn <span style="color:#ff4444;font-weight:bold;">red</span>.<br><br>
-      Your score is tracked automatically and you will be shown your score at the end of the exercise.
+      Click on the patch points to make connections.<br><br>
+      Commit when ready.
     </p>
 
     <input id="nameInput" placeholder="Enter your name">
+    <input id="spinInput" placeholder="Enter your SPIN (required)">
     <button onclick="startGame()">Start</button>
   </div>
 </div>
 
+<!-- HEADER -->
 <div id="header">
   <div>
     <div id="questionText">Loading...</div>
@@ -140,26 +152,29 @@
   </div>
 </div>
 
+<!-- QUIZ -->
 <div id="container">
   <img src="patchbay.png" id="patchbay">
   <svg id="cables"></svg>
   <div id="points"></div>
 </div>
 
+<!-- END SCREEN -->
+<div id="endScreen">
+  <h1>Homework Complete</h1>
+  <p id="finalScore"></p>
+
+  <button id="saveBtn" onclick="savePDF()">
+    Save your homework (PDF)
+  </button>
+</div>
+
 <script>
-
-/* ===== MOODLE ID DEBUG ===== */
-console.log("STEP 1 - SCRIPT LOADED");
-
-const urlParams = new URLSearchParams(window.location.search);
-console.log("STEP 2 - RAW QUERY:", window.location.search);
-
-const moodleID = urlParams.get("moodleid") || "";
-console.log("STEP 3 - MOODLE ID =", moodleID);
 
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
+let spin = "";
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
@@ -170,12 +185,13 @@ let firstPoint = null;
 
 let stateByQuestion = {};
 let correctByQuestion = {};
-
 let globalPatches = [];
 
 /* ================= START ================= */
 function startGame() {
   userName = document.getElementById("nameInput").value || "Anonymous";
+  spin = document.getElementById("spinInput").value || "UNKNOWN";
+
   document.getElementById("introScreen").style.display = "none";
   gameStarted = true;
 }
@@ -193,52 +209,7 @@ async function init() {
   loadQuestion();
 }
 
-/* ================= RANDOMIZATION ================= */
-function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
-
-/* ================= (rest unchanged) ================= */
-function buildQuestionSet(data){
-  const TARGET = 10;
-  const groups = {};
-  const singles = [];
-
-  data.forEach(q=>{
-    if(q.group){
-      if(!groups[q.group]) groups[q.group]=[];
-      groups[q.group].push(q);
-    } else singles.push(q);
-  });
-
-  let groupBlocks = Object.values(groups);
-  shuffle(groupBlocks);
-  shuffle(singles);
-
-  let selected = [];
-  if(groupBlocks.length) selected.push(...groupBlocks[0]);
-
-  let g=1,s=0;
-  while(selected.length<TARGET){
-    if(g<groupBlocks.length) selected.push(...groupBlocks[g++]);
-    else if(s<singles.length) selected.push(singles[s++]);
-    else break;
-  }
-
-  const blocks=[];
-  const used=new Set();
-
-  selected.forEach(q=>{
-    if(q.group){
-      if(!used.has(q.group)){
-        blocks.push(groups[q.group]);
-        used.add(q.group);
-      }
-    } else blocks.push([q]);
-  });
-
-  shuffle(blocks);
-  return blocks.flat().map(q=>q.row);
-}
-
+/* ================= GRID ================= */
 function buildGrid(){
   const rows="ABCDEFGHIJKLMNOP";
   const cols=48;
@@ -290,6 +261,7 @@ function buildGrid(){
   });
 }
 
+/* ================= GAME ================= */
 function addPatch(from,to){
   const row=QUESTION_SET[currentIndex];
   if(!stateByQuestion[row]) stateByQuestion[row]=[];
@@ -372,7 +344,7 @@ function commitPatches(){
   currentIndex++;
 
   if(currentIndex>=QUESTION_SET.length){
-    redraw();
+    showEndScreen();
     submitGrade();
     return;
   }
@@ -380,7 +352,26 @@ function commitPatches(){
   loadQuestion();
 }
 
-/* ===== SUBMIT WITH DEBUG ===== */
+/* ================= END SCREEN ================= */
+function showEndScreen(){
+  document.getElementById("container").style.display="none";
+  document.getElementById("header").style.display="none";
+  document.getElementById("endScreen").style.display="block";
+
+  const score = globalPatches.filter(p=>p.status==="correct").length;
+  const total = globalPatches.length;
+  const percent = total ? Math.round((score/total)*100) : 0;
+
+  document.getElementById("finalScore").innerText =
+    `Name: ${userName}\nSPIN: ${spin}\nScore: ${percent}%`;
+}
+
+/* ================= PDF ================= */
+function savePDF(){
+  window.print();
+}
+
+/* ================= SUBMIT ================= */
 function submitGrade(){
 
   const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
@@ -389,26 +380,20 @@ function submitGrade(){
 
   const payload={
     user:userName,
-    moodleID,
+    spin:spin,
     score,
     total,
     percent,
     details:globalPatches
   };
 
-  console.log("FINAL PAYLOAD BEING SENT:", payload);
-
-  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
-
   fetch(API_URL,{
     method:"POST",
     body: JSON.stringify(payload)
-  })
-  .then(res => res.text())
-  .then(text => console.log("SERVER RESPONSE:", text))
-  .catch(err => console.error("SUBMISSION FAILED:", err));
+  });
 }
 
+/* INIT */
 init();
 
 </script>
