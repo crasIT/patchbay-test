@@ -148,7 +148,7 @@
 
 <script>
 
-/* ===== MOODLE ID + DEBUG (CLEANED) ===== */
+/* ===== MOODLE ID DEBUG ===== */
 console.log("STEP 1 - SCRIPT LOADED");
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -196,9 +196,9 @@ async function init() {
 /* ================= RANDOMIZATION ================= */
 function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
 
+/* ================= (rest unchanged) ================= */
 function buildQuestionSet(data){
   const TARGET = 10;
-
   const groups = {};
   const singles = [];
 
@@ -214,11 +214,9 @@ function buildQuestionSet(data){
   shuffle(singles);
 
   let selected = [];
-
   if(groupBlocks.length) selected.push(...groupBlocks[0]);
 
   let g=1,s=0;
-
   while(selected.length<TARGET){
     if(g<groupBlocks.length) selected.push(...groupBlocks[g++]);
     else if(s<singles.length) selected.push(singles[s++]);
@@ -241,7 +239,6 @@ function buildQuestionSet(data){
   return blocks.flat().map(q=>q.row);
 }
 
-/* ================= GRID ================= */
 function buildGrid(){
   const rows="ABCDEFGHIJKLMNOP";
   const cols=48;
@@ -293,16 +290,13 @@ function buildGrid(){
   });
 }
 
-/* ================= PATCH ================= */
 function addPatch(from,to){
   const row=QUESTION_SET[currentIndex];
   if(!stateByQuestion[row]) stateByQuestion[row]=[];
-
   stateByQuestion[row].push({from,to,status:"pending"});
   redraw();
 }
 
-/* ================= LOAD ================= */
 function loadQuestion(){
   const row=QUESTION_SET[currentIndex];
   const data=DATA_BY_ROW[row];
@@ -317,11 +311,9 @@ function loadQuestion(){
   redraw();
 }
 
-/* ================= DRAW ================= */
 function redraw(){
   const svg=document.getElementById("cables");
   svg.innerHTML="";
-
   const rect=document.getElementById("container").getBoundingClientRect();
 
   QUESTION_SET.forEach(row=>{
@@ -357,16 +349,13 @@ function redraw(){
   });
 }
 
-/* ================= UNDO ================= */
 function undoLast(){
   const row=QUESTION_SET[currentIndex];
   stateByQuestion[row].pop();
   redraw();
 }
 
-/* ================= COMMIT ================= */
 function commitPatches(){
-
   const row=QUESTION_SET[currentIndex];
   const user=stateByQuestion[row];
   const correct=correctByQuestion[row];
@@ -377,7 +366,6 @@ function commitPatches(){
       (c.from===p.to&&c.to===p.from)
     );
     p.status=ok?"correct":"incorrect";
-
     globalPatches.push({...p});
   });
 
@@ -392,14 +380,12 @@ function commitPatches(){
   loadQuestion();
 }
 
-/* ================= SUBMIT ================= */
+/* ===== SUBMIT WITH DEBUG ===== */
 function submitGrade(){
 
   const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
   const total = globalPatches.length;
   const percent = total === 0 ? 0 : Math.round((score / total) * 100);
-
-  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
 
   const payload={
     user:userName,
@@ -409,6 +395,10 @@ function submitGrade(){
     percent,
     details:globalPatches
   };
+
+  console.log("FINAL PAYLOAD BEING SENT:", payload);
+
+  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
 
   fetch(API_URL,{
     method:"POST",
