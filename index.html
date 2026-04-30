@@ -104,23 +104,6 @@
     .correct { background: #00ff66; }
     .incorrect { background: #ff4444; }
     .selected { background: yellow !important; }
-
-  
-  @media print {
-  #controls {
-    display: none;
-  }
-
-  #introScreen {
-    display: none !important;
-  }
-
-  button {
-    display: none !important;
-  }
-}
-  
-  
   </style>
 </head>
 
@@ -128,20 +111,15 @@
 
 <div id="introScreen">
   <div id="introBox">
-    <h1>Patchbay Homework Assignment 4.2.3</h1>
+    <h1>Patchbay Homework Assignment</h1>
 
     <p>
       Each question represents a routing task.<br><br>
-
       Click on the patch points to make the connected patch.<br><br>
-
       Use Undo to remove mistakes.<br><br>
-
       Commit locks your answer and moves forward.<br><br>
-
       Correct = green<br>
       Incorrect = red<br><br>
-
       Score is tracked automatically.
     </p>
 
@@ -157,13 +135,10 @@
     <div id="progressText"></div>
   </div>
 
- <div id="controls">
-  <button onclick="undoLast()">Undo</button>
-  <button onclick="commitPatches()">Commit</button>
-  <button id="pdfBtn" onclick="savePDF()" style="display:none;">
-    Save your homework (PDF)
-  </button>
-</div>
+  <div id="controls">
+    <button onclick="undoLast()">Undo</button>
+    <button onclick="commitPatches()">Commit</button>
+  </div>
 </div>
 
 <div id="container">
@@ -177,7 +152,8 @@
 /* ================= STATE ================= */
 let gameStarted = false;
 let userName = "";
- let userSpin = ""; 
+let userSpin = "";
+let examID = ""; // 🔥 NEW
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxpxOupsEFQMIheiLaG14S8Na7lKJtDxHeDw-p7u2bPifjo017dH3T4gxslMBNZGgY1/exec";
 
@@ -190,10 +166,18 @@ let stateByQuestion = {};
 let correctByQuestion = {};
 let globalPatches = [];
 
+/* ================= ID GENERATOR ================= */
+function generateExamID() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 /* ================= START ================= */
 function startGame() {
   userName = document.getElementById("nameInput").value || "Anonymous";
-   userSpin = document.getElementById("spinInput").value || "";
+  userSpin = document.getElementById("spinInput").value || "";
+
+  examID = generateExamID(); // 🔥 assign once
+
   document.getElementById("introScreen").style.display = "none";
   gameStarted = true;
 }
@@ -413,31 +397,23 @@ function submitGrade(){
   const total = globalPatches.length;
   const percent = total === 0 ? 0 : Math.round((score / total) * 100);
 
-  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%");
+  alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%\n\nExam ID: " + examID);
 
-document.getElementById("pdfBtn").style.display = "inline-block";
-document.getElementById("questionText").innerText =
-  "Submission Complete — Score: " + percent + "%";
-  
   fetch(API_URL,{
     method:"POST",
     body: JSON.stringify({
       user:userName,
       spin:userSpin,
+      examID, // 🔥 NEW
       score,
       total,
       percent,
       details:globalPatches
     })
   });
-
 }
 
 init();
-
-  function savePDF() {
-  window.print();
-}
 
 </script>
 </body>
