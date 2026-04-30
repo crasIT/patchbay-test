@@ -111,7 +111,7 @@
 
 <div id="introScreen">
   <div id="introBox">
-    <h1>Patchbay Homework Assignment 4.2.7</h1>
+    <h1>Patchbay Homework Assignment 4.2.8</h1>
 
     <p>
       Each question represents a routing task.<br><br>
@@ -300,10 +300,16 @@ function buildGrid(){
   });
 }
 
-/* ================= PATCH ================= */
+/* ================= PATCH (OVERRIDE LOGIC ADDED) ================= */
 function addPatch(from,to){
-  const row=QUESTION_SET[currentIndex];
-  if(!stateByQuestion[row]) stateByQuestion[row]=[];
+  const row = QUESTION_SET[currentIndex];
+  if(!stateByQuestion[row]) stateByQuestion[row] = [];
+
+  // 🔒 NEW: enforce 1 connection per port (overwrite behavior)
+  stateByQuestion[row] = stateByQuestion[row].filter(p =>
+    p.from !== from && p.to !== from &&
+    p.from !== to && p.to !== to
+  );
 
   stateByQuestion[row].push({from,to,status:"pending"});
   redraw();
