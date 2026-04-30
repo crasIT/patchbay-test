@@ -111,11 +111,11 @@
 
 <div id="introScreen">
   <div id="introBox">
-    <h1>Patchbay Homework Assignment 4.2.9</h1>
+    <h1>Patchbay Homework Assignment 4.2.9.1</h1>
 
     <p>
       Each question represents a routing task.<br><br>
-      Click on the patch points to make connections.<br><br>
+      Click on the patch points to make the connected patch.<br><br>
       Use Undo to remove mistakes.<br><br>
       Commit locks your answer and moves forward.<br><br>
       Correct = green<br>
@@ -169,6 +169,9 @@ let stateByQuestion = {};
 let correctByQuestion = {};
 let globalPatches = [];
 
+let totalPossible = 0;
+let totalScore = 0;
+
 /* ================= ID ================= */
 function generateExamID() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -183,8 +186,6 @@ function startGame() {
 
   document.getElementById("introScreen").style.display = "none";
   gameStarted = true;
-
-  init();
 }
 
 /* ================= INIT ================= */
@@ -301,8 +302,13 @@ function buildGrid(){
 
 /* ================= PATCH ================= */
 function addPatch(from,to){
-  const row=QUESTION_SET[currentIndex];
-  if(!stateByQuestion[row]) stateByQuestion[row]=[];
+  const row = QUESTION_SET[currentIndex];
+  if(!stateByQuestion[row]) stateByQuestion[row] = [];
+
+  stateByQuestion[row] = stateByQuestion[row].filter(p =>
+    p.from !== from && p.to !== from &&
+    p.from !== to && p.to !== to
+  );
 
   stateByQuestion[row].push({from,to,status:"pending"});
   redraw();
@@ -323,12 +329,13 @@ function loadQuestion(){
   redraw();
 }
 
-/* ================= DRAW ================= */
+/* ================= DRAW (FIXED) ================= */
 function redraw(){
   const svg=document.getElementById("cables");
   svg.innerHTML="";
   const rect=document.getElementById("container").getBoundingClientRect();
 
+  /* 🔧 FIX: fully clear old visual state */
   document.querySelectorAll(".patch-point").forEach(p=>{
     p.classList.remove("pending","correct","incorrect");
   });
@@ -376,17 +383,37 @@ function undoLast(){
 /* ================= COMMIT ================= */
 function commitPatches(){
   const row=QUESTION_SET[currentIndex];
-  const user=stateByQuestion[row];
-  const correct=correctByQuestion[row];
+  const user = stateByQuestion[row] || [];
+  const correct = correctByQuestion[row] || [];
+
+  totalPossible += correct.length;
+
+  let correctCount = 0;
+  let wrongCount = 0;
 
   user.forEach(p=>{
-    const ok=correct.some(c=>
-      (c.from===p.from&&c.to===p.to)||
-      (c.from===p.to&&c.to===p.from)
+    const ok = correct.some(c =>
+      (c.from===p.from && c.to===p.to) ||
+      (c.from===p.to && c.to===p.from)
     );
-    p.status=ok?"correct":"incorrect";
+
+    p.status = ok ? "correct" : "incorrect";
+
+    if(ok) correctCount++;
+    else wrongCount++;
+
     globalPatches.push({...p});
   });
+
+  const missed = Math.max(0, correct.length - correctCount);
+  for(let i=0;i<missed;i++){
+    globalPatches.push({status:"incorrect"});
+  }
+
+  let questionScore = correctCount - wrongCount;
+  if(questionScore < 0) questionScore = 0;
+
+  totalScore += questionScore;
 
   currentIndex++;
 
@@ -402,8 +429,8 @@ function commitPatches(){
 /* ================= SUBMIT ================= */
 function submitGrade(){
 
-  const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
-  const total = globalPatches.length;
+  const score = totalScore;
+  const total = totalPossible;
   const percent = total === 0 ? 0 : Math.round((score / total) * 100);
 
   alert("SUBMISSION SUCCESSFUL\n\nScore = " + percent + "%\n\nExam ID: " + examID);
