@@ -300,12 +300,11 @@ function buildGrid(){
   });
 }
 
-/* ================= PATCH (OVERRIDE LOGIC ADDED) ================= */
+/* ================= PATCH ================= */
 function addPatch(from,to){
   const row = QUESTION_SET[currentIndex];
   if(!stateByQuestion[row]) stateByQuestion[row] = [];
 
-  // 🔒 NEW: enforce 1 connection per port (overwrite behavior)
   stateByQuestion[row] = stateByQuestion[row].filter(p =>
     p.from !== from && p.to !== from &&
     p.from !== to && p.to !== to
@@ -330,11 +329,16 @@ function loadQuestion(){
   redraw();
 }
 
-/* ================= DRAW ================= */
+/* ================= DRAW (FIXED) ================= */
 function redraw(){
   const svg=document.getElementById("cables");
   svg.innerHTML="";
   const rect=document.getElementById("container").getBoundingClientRect();
+
+  /* 🔧 FIX: fully clear old visual state */
+  document.querySelectorAll(".patch-point").forEach(p=>{
+    p.classList.remove("pending","correct","incorrect");
+  });
 
   QUESTION_SET.forEach(row=>{
     const patches=stateByQuestion[row]||[];
@@ -453,7 +457,7 @@ function submitGrade(){
 /* ================= COPY ================= */
 function copyExamID(){
   navigator.clipboard.writeText(examID);
-  alert("Exam ID copied: " + examID);
+  alert("Copied: " + examID);
 }
 
 init();
