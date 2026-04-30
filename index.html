@@ -111,7 +111,7 @@
 
 <div id="introScreen">
   <div id="introBox">
-    <h1>Patchbay Homework Assignment 4.2.6</h1>
+    <h1>Patchbay Homework Assignment 4.2.7</h1>
 
     <p>
       Each question represents a routing task.<br><br>
@@ -169,7 +169,8 @@ let stateByQuestion = {};
 let correctByQuestion = {};
 let globalPatches = [];
 
-let totalPossible = 0; // 🔥 NEW
+let totalPossible = 0;
+let totalScore = 0;
 
 /* ================= ID ================= */
 function generateExamID() {
@@ -375,24 +376,34 @@ function commitPatches(){
   const user = stateByQuestion[row] || [];
   const correct = correctByQuestion[row] || [];
 
-  // 🔥 ADD TO DENOMINATOR
   totalPossible += correct.length;
 
-  // grade correct matches
+  let correctCount = 0;
+  let wrongCount = 0;
+
   user.forEach(p=>{
     const ok = correct.some(c =>
       (c.from===p.from && c.to===p.to) ||
       (c.from===p.to && c.to===p.from)
     );
+
     p.status = ok ? "correct" : "incorrect";
+
+    if(ok) correctCount++;
+    else wrongCount++;
+
     globalPatches.push({...p});
   });
 
-  // 🔥 COUNT MISSED PATCHES
-  const missed = correct.length - user.length;
+  const missed = Math.max(0, correct.length - correctCount);
   for(let i=0;i<missed;i++){
     globalPatches.push({status:"incorrect"});
   }
+
+  let questionScore = correctCount - wrongCount;
+  if(questionScore < 0) questionScore = 0;
+
+  totalScore += questionScore;
 
   currentIndex++;
 
@@ -408,7 +419,7 @@ function commitPatches(){
 /* ================= SUBMIT ================= */
 function submitGrade(){
 
-  const score = globalPatches.reduce((a,p)=>a + (p.status==="correct"?1:0),0);
+  const score = totalScore;
   const total = totalPossible;
   const percent = total === 0 ? 0 : Math.round((score / total) * 100);
 
